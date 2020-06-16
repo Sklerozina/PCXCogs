@@ -11,16 +11,16 @@ __author__ = "PhasecoreX"
 class Wikipedia(commands.Cog):
     """Look up stuff on Wikipedia."""
 
-    base_url = "https://en.wikipedia.org/w/api.php"
+    base_url = "https://ru.wikipedia.org/w/api.php"
     headers = {"user-agent": "Red-DiscordBot/" + redbot_version}
     footer_icon = (
         "https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Wikimedia-logo.png"
         "/600px-Wikimedia-logo.png"
     )
 
-    @commands.command(aliases=["wiki"])
+    @commands.command(aliases=["wiki", "вики", "википедия"])
     async def wikipedia(self, ctx: commands.Context, *, query: str):
-        """Get information from Wikipedia."""
+        """[**wiki**, **википедия**, **вики**] Получает информацию из Википедии."""
         payload = self.generate_payload(query)
         conn = aiohttp.TCPConnector()
         async with aiohttp.ClientSession(connector=conn) as session:
@@ -34,26 +34,26 @@ class Wikipedia(commands.Cog):
             for page in result["query"]["pages"]:
                 title = page["title"]
                 description = page["extract"].strip().replace("\n", "\n\n")
-                url = "https://en.wikipedia.org/wiki/{}".format(title.replace(" ", "_"))
+                url = "https://ru.wikipedia.org/wiki/{}".format(title.replace(" ", "_"))
 
             if len(description) > 1500:
                 description = description[:1500].strip()
-                description += "... [(read more)]({})".format(url)
+                description += "... [(читать больше)]({})".format(url)
 
             embed = discord.Embed(
-                title="Wikipedia: {}".format(title),
+                title="Википедия: {}".format(title),
                 description=u"\u2063\n{}\n\u2063".format(description),
                 color=discord.Color.blue(),
                 url=url,
             )
             embed.set_footer(
-                text="Information provided by Wikimedia", icon_url=self.footer_icon
+                text="Информация предоставлена Википедией", icon_url=self.footer_icon
             )
             await ctx.send(embed=embed)
 
         except KeyError:
             await ctx.send(
-                error("I'm sorry, I couldn't find \"{}\" on Wikipedia".format(query))
+                error("Простите, не могу найти \"{}\" на Википедии".format(query))
             )
         except discord.Forbidden:
             await ctx.send(
