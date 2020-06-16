@@ -1,6 +1,7 @@
 """Dice cog for Red-DiscordBot by PhasecoreX."""
 import asyncio
 import random
+import discord
 from io import BytesIO
 from tokenize import NAME, NUMBER, OP, tokenize
 from typing import List, Union
@@ -18,7 +19,7 @@ __author__ = "PhasecoreX"
 class Dice(commands.Cog):
     """Perform complex dice rolling."""
 
-    default_global_settings = {"max_dice_rolls": 10000, "max_die_sides": 1000}
+    default_global_settings = {"max_dice_rolls": 100, "max_die_sides": 1000}
 
     def __init__(self, bot):
         """Set up the cog."""
@@ -114,6 +115,8 @@ class Dice(commands.Cog):
     @commands.command()
     async def dice(self, ctx: commands.Context, *, roll: str):
         """Perform die roll."""
+        roll = "+".join(roll.split())
+
         try:
             # Pass 1: Tokenize and convert #d# into die objects
             roll_pass1 = self.get_equation_tokens(
@@ -129,7 +132,7 @@ class Dice(commands.Cog):
                 if isinstance(token, Die):
                     token.roll()
                     roll_pass2 += str(token.total)
-                    roll_log += "\nRolling {}: {} = {}".format(
+                    roll_log += "\nБроски {}: {} = {}".format(
                         str(token), str(token.rolls), str(token.total)
                     )
                 else:
@@ -140,19 +143,19 @@ class Dice(commands.Cog):
                 result = str(eval_expr(roll_pass2))
                 roll_pass2 = roll_pass2.replace("*", "×")
                 roll_friendly = roll_friendly.replace("*", "×")
-                roll_log = "\n*Roll Log:" + roll_log
+                roll_log = "\n*Лог:" + roll_log
                 if len(roll_pass1) > 1:
-                    roll_log += "\nResulting equation: {} = {}".format(
+                    roll_log += "\nРезультат: {} = {}".format(
                         roll_pass2, result
                     )
                 roll_log += "*"
                 if len(roll_log) > 1500:
-                    roll_log = "\n*(Log too long to display)*"
-                await ctx.send(
-                    "\N{GAME DIE} {} rolled {} and got **{}**{}".format(
-                        ctx.message.author.mention, roll_friendly, result, roll_log
-                    )
-                )
+                    roll_log = "\n*(Лог слишком большой для отображения)*"
+                await ctx.send(embed=discord.Embed(color=discord.Color.green(),
+                                                   description="\N{GAME DIE} **{}** бросил **{}** и получил **{}**{}".format(
+                                                       ctx.message.author.display_name, roll_friendly, result, roll_log
+                                                   ))
+                               )
             else:
                 await ctx.send(
                     warning(
