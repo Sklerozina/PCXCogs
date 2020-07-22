@@ -45,13 +45,13 @@ class UpdateNotify(commands.Cog):
 
         self.next_check = datetime.datetime.now()
         self.bg_loop_task = None
-        self.enable_bg_loop()
 
     async def initialize(self):
         """Perform setup actions before loading cog."""
-        await self._maybe_update_config()
+        await self._migrate_config()
+        self.enable_bg_loop()
 
-    async def _maybe_update_config(self):
+    async def _migrate_config(self):
         """Perform some configuration migrations."""
         if not await self.config.schema_version():
             # Migrate old update_check_interval (minutes) to frequency (seconds)
@@ -66,28 +66,29 @@ class UpdateNotify(commands.Cog):
 
     def enable_bg_loop(self):
         """Set up the background loop task."""
+
+        def error_handler(self, fut: asyncio.Future):
+            try:
+                fut.result()
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                log.exception(
+                    "Unexpected exception occurred in background loop of UpdateNotify: ",
+                    exc_info=exc,
+                )
+                asyncio.create_task(
+                    self.bot.send_to_owners(
+                        "An unexpected exception occurred in the background loop of UpdateNotify.\n"
+                        "Updates will not be checked until UpdateNotify is reloaded.\n"
+                        "Check your console or logs for details, and consider opening a bug report for this."
+                    )
+                )
+
         if self.bg_loop_task:
             self.bg_loop_task.cancel()
         self.bg_loop_task = self.bot.loop.create_task(self.bg_loop())
-        self.bg_loop_task.add_done_callback(self._error_handler)
-
-    def _error_handler(self, fut: asyncio.Future):
-        try:
-            fut.result()
-        except asyncio.CancelledError:
-            pass
-        except Exception as exc:
-            log.exception(
-                "Unexpected exception occurred in background loop of UpdateNotify: ",
-                exc_info=exc,
-            )
-            asyncio.create_task(
-                self.bot.send_to_owners(
-                    "An unexpected exception occurred in the background loop of UpdateNotify.\n"
-                    "Updates will not be checked until UpdateNotify is reloaded.\n"
-                    "Check your console or logs for details, and consider opening a bug report for this."
-                )
-            )
+        self.bg_loop_task.add_done_callback(error_handler)
 
     def cog_unload(self):
         """Clean up when cog shuts down."""
@@ -218,10 +219,10 @@ class UpdateNotify(commands.Cog):
             try:
                 async with session.get(url) as resp:
                     if resp.status != 200:
-                        raise aiohttp.client_exceptions.ServerConnectionError
+                        raise aiohttp.ServerConnectionError
                     data = await resp.json()
                     return data["info"]["version"]
-            except aiohttp.client_exceptions.ServerConnectionError:
+            except aiohttp.ServerConnectionError:
                 log.warning(
                     "PyPI seems to be having some issues at the moment while checking for the latest Red-DiscordBot update. "
                     "If this keeps happening, and PyPI is indeed up, consider opening a bug report for this."
@@ -237,7 +238,7 @@ class UpdateNotify(commands.Cog):
                 while url:
                     async with session.get(url) as resp:
                         if resp.status != 200:
-                            raise aiohttp.client_exceptions.ServerConnectionError
+                            raise aiohttp.ServerConnectionError
                         data = await resp.json()
                         if on_master:
                             # That first url has the actual commit data nested.
@@ -254,7 +255,7 @@ class UpdateNotify(commands.Cog):
                             commit_date_string
                         )
                         return (sha, commit_date)
-            except aiohttp.client_exceptions.ServerConnectionError:
+            except aiohttp.ServerConnectionError:
                 log.warning(
                     "GitHub seems to be having some issues at the moment while checking for the latest Docker commit. "
                     "If this keeps happening, and GitHub is indeed up, consider opening a bug report for this."
@@ -272,7 +273,7 @@ class UpdateNotify(commands.Cog):
                 while url:
                     async with session.get(url) as resp:
                         if resp.status != 200:
-                            raise aiohttp.client_exceptions.ServerConnectionError
+                            raise aiohttp.ServerConnectionError
                         data = await resp.json()
                         for docker_image in data["results"]:
                             if docker_image["name"] == tag:
@@ -280,7 +281,7 @@ class UpdateNotify(commands.Cog):
                                     docker_image["last_updated"][:19]
                                 )
                         url = data["next"]
-            except aiohttp.client_exceptions.ServerConnectionError:
+            except aiohttp.ServerConnectionError:
                 log.warning(
                     "Docker Hub seems to be having some issues at the moment while checking for the latest update. "
                     "If this keeps happening, and Docker Hub is indeed up, consider opening a bug report for this."
@@ -379,5 +380,5 @@ class UpdateNotify(commands.Cog):
             message = await self.update_check()
             if message:
                 await self.bot.send_to_owners(message)
-        except aiohttp.ClientConnectorError:
+        except aiohttp.ClientConnectionError:
             pass
