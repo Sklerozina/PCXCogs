@@ -4,6 +4,7 @@ from typing import Union
 
 import discord
 from redbot.core import Config, checks, commands
+from redbot.core.utils import AsyncIter
 from redbot.core.utils.chat_formatting import error, info
 
 from .pcx_lib import checkmark, delete
@@ -12,7 +13,16 @@ __author__ = "PhasecoreX"
 
 
 class ReactChannel(commands.Cog):
-    """Per-channel auto reaction tools."""
+    """Per-channel auto reaction tools.
+
+    Admins can set up certain channels to be ReactChannels, where each message in it
+    will automatically have reactions applied. Depending on the type of ReactChannel,
+    click these reactions could trigger automatic actions.
+
+    Additionally, Admins can set up a guildwide upvote and/or downvote emojis, where
+    reacting to messages with these (in any channel) will increase or decrease the
+    message owners total karma.
+    """
 
     default_global_settings = {"schema_version": 0}
     default_guild_settings = {
@@ -35,9 +45,9 @@ class ReactChannel(commands.Cog):
 
     async def initialize(self):
         """Perform setup actions before loading cog."""
-        await self._maybe_update_config()
+        await self._migrate_config()
 
-    async def _maybe_update_config(self):
+    async def _migrate_config(self):
         """Perform some configuration migrations."""
         if not await self.config.schema_version():
             # If guild had a vote channel, set up default upvote and downvote emojis
@@ -61,40 +71,49 @@ class ReactChannel(commands.Cog):
             await self.config.clear_raw("version")
             await self.config.schema_version.set(1)
 
+    async def red_delete_data_for_user(self, *, requester, user_id: int):
+        """Users can reset their karma back to zero I guess."""
+        all_members = await self.config.all_members()
+        async for guild_id, member_dict in AsyncIter(all_members.items(), steps=100):
+            if user_id in member_dict:
+                await self.config.member_from_ids(guild_id, user_id).clear()
+
     @commands.group()
     @commands.guild_only()
     @checks.admin_or_permissions(manage_guild=True)
     async def reactchannelset(self, ctx: commands.Context):
         """Manage ReactChannel settings."""
-        if not ctx.invoked_subcommand:
-            message = ""
-            channels = await self.config.guild(ctx.message.guild).channels()
-            for channel_id, channel_type in channels.items():
-                emojis = "???"
-                if channel_type == "checklist":
-                    emojis = "\N{WHITE HEAVY CHECK MARK}"
-                if channel_type == "vote":
-                    emojis = ""
-                    upvote = await self._get_emoji(ctx.message.guild, "upvote")
-                    downvote = await self._get_emoji(ctx.message.guild, "downvote")
-                    if upvote:
-                        emojis += upvote
-                    if downvote:
-                        if emojis:
-                            emojis += " "
-                        emojis += downvote
-                    if not emojis:
-                        emojis = "(disabled, see `[p]reactchannelset emoji`)"
-                if isinstance(channel_type, list):
-                    emojis = " ".join(channel_type)
-                    channel_type = "custom"
-                message += "\n  - <#{}>: {} - {}".format(
-                    channel_id, channel_type.capitalize(), emojis
-                )
-            if not message:
-                message = " None"
-            message = "ReactChannels configured:" + message
-            await ctx.send(message)
+        pass
+
+    @reactchannelset.command()
+    async def settings(self, ctx: commands.Context):
+        """Display current settings."""
+        message = ""
+        channels = await self.config.guild(ctx.guild).channels()
+        for channel_id, channel_type in channels.items():
+            emojis = "???"
+            if channel_type == "checklist":
+                emojis = "\N{WHITE HEAVY CHECK MARK}"
+            if channel_type == "vote":
+                emojis = ""
+                upvote = await self._get_emoji(ctx.guild, "upvote")
+                downvote = await self._get_emoji(ctx.guild, "downvote")
+                if upvote:
+                    emojis += upvote
+                if downvote:
+                    if emojis:
+                        emojis += " "
+                    emojis += downvote
+                if not emojis:
+                    emojis = "(disabled, see `[p]reactchannelset emoji`)"
+            if isinstance(channel_type, list):
+                emojis = " ".join(channel_type)
+                channel_type = "custom"
+            message += f"\n  - <#{channel_id}>: {channel_type.capitalize()} - {emojis}"
+        if not message:
+            message = " None"
+        message = "ReactChannels configured:" + message
+        await ctx.send(message)
 
     @reactchannelset.group()
     async def enable(self, ctx: commands.Context):
@@ -136,30 +155,26 @@ class ReactChannel(commands.Cog):
             except discord.HTTPException:
                 await ctx.send(
                     error(
-                        "{} is not a valid emoji I can use!".format(
-                            "That" if len(channel_type) == 1 else "One of those emojis"
-                        )
+                        f"{'That' if len(channel_type) == 1 else 'One of those emojis'} is not a valid emoji I can use!"
                     )
                 )
                 return
-        async with self.config.guild(ctx.message.guild).channels() as channels:
+        async with self.config.guild(ctx.guild).channels() as channels:
             channels[str(channel.id)] = channel_type
         channel_type_name = channel_type
         custom_emojis = ""
         if isinstance(channel_type_name, list):
             channel_type_name = "custom"
-            custom_emojis = " ({})".format(", ".join(channel_type))
+            custom_emojis = f" ({', '.join(channel_type)})"
         await ctx.send(
             checkmark(
-                "<#{}> is now a {} ReactChannel.{}".format(
-                    str(channel.id), channel_type_name, custom_emojis
-                )
+                f"{channel.mention} is now a {channel_type_name} ReactChannel.{custom_emojis}"
             )
         )
         if (
             channel_type == "vote"
-            and not await self._get_emoji(ctx.message.guild, "upvote")
-            and not await self._get_emoji(ctx.message.guild, "downvote")
+            and not await self._get_emoji(ctx.guild, "upvote")
+            and not await self._get_emoji(ctx.guild, "downvote")
         ):
             await ctx.send(
                 info(
@@ -175,26 +190,24 @@ class ReactChannel(commands.Cog):
         if channel is None:
             channel = ctx.message.channel
 
-        async with self.config.guild(ctx.message.guild).channels() as channels:
+        async with self.config.guild(ctx.guild).channels() as channels:
             try:
                 del channels[str(channel.id)]
             except KeyError:
                 pass
         await ctx.send(
             checkmark(
-                "ReactChannel functionality has been disabled on <#{}>.".format(
-                    str(channel.id)
-                )
+                f"ReactChannel functionality has been disabled on {channel.mention}."
             )
         )
 
     @reactchannelset.group()
     async def emoji(self, ctx: commands.Context):
         """Manage emojis used for ReactChannels."""
-        upvote = await self._get_emoji(ctx.message.guild, "upvote")
-        downvote = await self._get_emoji(ctx.message.guild, "downvote")
-        message = "Upvote emoji: {}\n".format(upvote if upvote else "None")
-        message += "Downvote emoji: {}".format(downvote if downvote else "None")
+        upvote = await self._get_emoji(ctx.guild, "upvote")
+        downvote = await self._get_emoji(ctx.guild, "downvote")
+        message = f"Upvote emoji: {upvote if upvote else 'None'}\n"
+        message += f"Downvote emoji: {downvote if downvote else 'None'}"
         await ctx.send(message)
 
     @emoji.command(name="upvote")
@@ -216,9 +229,7 @@ class ReactChannel(commands.Cog):
             await setting.set(None)
             await ctx.send(
                 checkmark(
-                    "{} emoji for this guild has been disabled".format(
-                        emoji_type.capitalize()
-                    )
+                    f"{emoji_type.capitalize()} emoji for this guild has been disabled"
                 )
             )
             await self._get_emoji(ctx.guild, emoji_type, refresh=True)
@@ -235,9 +246,7 @@ class ReactChannel(commands.Cog):
             await setting.set(save)
             await ctx.send(
                 checkmark(
-                    "{} emoji for this guild has been set to {}".format(
-                        emoji_type.capitalize(), emoji
-                    )
+                    f"{emoji_type.capitalize()} emoji for this guild has been set to {emoji}"
                 )
             )
             await self._get_emoji(ctx.guild, emoji_type, refresh=True)
@@ -251,18 +260,16 @@ class ReactChannel(commands.Cog):
         member = self.config.member(ctx.message.author)
         total_karma = await member.karma()
         await ctx.send(
-            "{}, you have **{}** message karma".format(
-                ctx.message.author.mention, total_karma
-            )
+            f"{ctx.message.author.mention}, you have **{total_karma}** message karma"
         )
 
     @commands.command()
     @commands.guild_only()
     async def upvote(self, ctx: commands.Context):
         """View this guilds upvote reaction."""
-        upvote = await self._get_emoji(ctx.message.guild, "upvote")
+        upvote = await self._get_emoji(ctx.guild, "upvote")
         if upvote:
-            await ctx.send("This guilds upvote emoji is {}".format(upvote))
+            await ctx.send(f"This guilds upvote emoji is {upvote}")
         else:
             await ctx.send("This guild does not have an upvote emoji set")
 
@@ -270,9 +277,9 @@ class ReactChannel(commands.Cog):
     @commands.guild_only()
     async def downvote(self, ctx: commands.Context):
         """View this guilds downvote reaction."""
-        downvote = await self._get_emoji(ctx.message.guild, "downvote")
+        downvote = await self._get_emoji(ctx.guild, "downvote")
         if downvote:
-            await ctx.send("This guilds downvote emoji is {}".format(downvote))
+            await ctx.send(f"This guilds downvote emoji is {downvote}")
         else:
             await ctx.send("This guild does not have a downvote emoji set")
 
@@ -280,6 +287,8 @@ class ReactChannel(commands.Cog):
     async def on_message_without_command(self, message: discord.Message):
         """Watch for messages in enabled react channels to add reactions."""
         if message.guild is None or message.channel is None:
+            return
+        if await self.bot.cog_disabled_in_guild(self, message.guild):
             return
         channels = await self.config.guild(message.guild).channels()
         if str(message.channel.id) not in channels:
@@ -309,6 +318,10 @@ class ReactChannel(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         """Watch for reactions added to messages in react channels (or all channels for karma) and perform actions on them."""
+        if not payload.guild_id or await self.bot.cog_disabled_in_guild_raw(
+            self.qualified_name, payload.guild_id
+        ):
+            return
         guild = self.bot.get_guild(payload.guild_id)
         channel = self.bot.get_channel(payload.channel_id)
         user = self.bot.get_user(payload.user_id)  # User who added a reaction
@@ -361,6 +374,10 @@ class ReactChannel(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
         """Watch for reactions removed from messages in react channels (or all channels for karma) and perform actions on them."""
+        if not payload.guild_id or await self.bot.cog_disabled_in_guild_raw(
+            self.qualified_name, payload.guild_id
+        ):
+            return
         guild = self.bot.get_guild(payload.guild_id)
         channel = self.bot.get_channel(payload.channel_id)
         user = self.bot.get_user(payload.user_id)  # User whose reaction was removed

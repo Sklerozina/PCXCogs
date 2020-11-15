@@ -1,11 +1,11 @@
 # PCXCogs
-
 PhasecoreX's Cogs for [Red-DiscordBot](https://github.com/Cog-Creators/Red-DiscordBot/releases).
 
-[![Red-DiscordBot](https://img.shields.io/badge/Red--DiscordBot-V3-red.svg)](https://github.com/Cog-Creators/Red-DiscordBot/releases)
-[![Code Style: Black](https://img.shields.io/badge/Code%20Style-Black-000000.svg)](https://github.com/ambv/black)
+[![Red-DiscordBot](https://img.shields.io/badge/red--discordbot-v3-red)](https://github.com/Cog-Creators/Red-DiscordBot/releases)
+[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000)](https://github.com/ambv/black)
 [![Chat Support](https://img.shields.io/discord/608057344487849989)](https://discord.gg/QzdPp2b)
-[![Donate to support my cogs](https://img.shields.io/badge/Paypal-Donate-blue.svg)](https://paypal.me/pcx)
+[![BuyMeACoffee](https://img.shields.io/badge/buy%20me%20a%20coffee-donate-orange)](https://buymeacoff.ee/phasecorex)
+[![PayPal](https://img.shields.io/badge/paypal-donate-blue)](https://paypal.me/pcx)
 
 To add these wonderful cogs to your instance, run this command:
 
@@ -18,6 +18,10 @@ If you don't have an instance, consider using my nice [docker image](https://hub
 If you'd like to contact me, test out my cogs, or stay up to date on my cogs, consider joining my [Discord server](https://discord.gg/QzdPp2b)! You can find me on the Red Cog Support server as well.
 
 ## The List of Cogs
+
+### AutoRoom
+
+Automatic voice channel management. When a user joins an AutoRoom source channel, they will be moved into their own personal on-demand voice channel (AutoRoom). Once all users have left the AutoRoom, it is automatically deleted.
 
 ### BanCheck
 
@@ -57,4 +61,4 @@ Uwuize messages. Takes the pwevious mwessage and uwuizes it. Sowwy.
 
 ### Wikipedia
 
-Look up articles on Wikipedia. Ported from v2; originally by PaddoInWonderland. I've made some enhancements to it as well.                                                                                                                 |
+Look up articles on Wikipedia. Ported from v2; originally by PaddoInWonderland. I've made some enhancements to it as well.
