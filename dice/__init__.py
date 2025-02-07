@@ -1,8 +1,11 @@
 """Package for Dice cog."""
+import asyncio
 from .dice import Dice
 
 
-def setup(bot):
+async def setup(bot):
     """Load Dice cog."""
-    cog = Dice(bot)
-    bot.add_cog(cog)
+    if asyncio.iscoroutinefunction(bot.add_cog):
+            await bot.add_cog(Dice(bot))
+    else:
+        bot.add_cog(Dice(bot))
